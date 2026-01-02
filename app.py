@@ -8,6 +8,7 @@ from PyQt6.QtWidgets import (
     QHBoxLayout,
     QPushButton,
     QLabel,
+    QLineEdit,
     QMainWindow,
     QVBoxLayout,
     QWidget
@@ -24,7 +25,7 @@ class MainWindow(QMainWindow):
         self.BREAK_TIME = timedelta(minutes = 5)
         self.GRACE_TIME = timedelta(seconds = 10)
 
-        self.WORK_TOPIC = "Topic Name"
+        self.work_topic = "Topic Name"
         self.is_working = True
         self.is_grace = False
 
@@ -39,11 +40,16 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("Pomodoro Timer")
         self.setFixedSize(300, 200)
 
-        self.topic_label = QLabel(self.WORK_TOPIC)
+        self.topic_label = QLineEdit(self.work_topic)
         self.topic_label.setAlignment(
             Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignHCenter
-            )
-        self.topic_label.setStyleSheet(f"font-size: {self.FONT_SIZE_TOPIC};")
+        )
+        self.topic_label.setStyleSheet(f"""
+            font-size: {self.FONT_SIZE_TOPIC};
+            border: none;
+            background: transparent;
+        """)
+        self.topic_label.textChanged.connect(self.update_topic)
 
         self.timer_label = QLabel()
         self.timer_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -98,8 +104,8 @@ class MainWindow(QMainWindow):
         self.time_over_sound.stop()
 
         self.remaining_time = self.WORK_TIME
-        self.update_label_text()
-        self.topic_label.setText(self.WORK_TOPIC)
+        self.update_timer_label()
+        self.topic_label.setText(self.work_topic)
 
         self.toggle_time_button.setText("Start")
         self.toggle_time_button.setEnabled(True)
@@ -109,24 +115,32 @@ class MainWindow(QMainWindow):
         """Update the timer display every second."""
         if self.remaining_time.total_seconds() > 0:
             self.remaining_time -= timedelta(milliseconds=self.TICK_INTERVAL)
-            self.update_label_text()
+            self.update_timer_label()
         else: # Time is over
             self.handle_transition()
 
     def apply_topic_style(self, color):
         """Standardized styling to keep handle_transition clean."""
-        style = f"font-size: {self.FONT_SIZE_TOPIC}; color: {color};"
+        style = f"""
+            font-size: {self.FONT_SIZE_TOPIC};
+            color: {color};
+            border: none;
+            background: transparent;
+        """
         self.topic_label.setStyleSheet(style)
     
     def handle_transition(self):
         """Handles the transition between work and break periods."""
         self.time_over_sound.setLoopCount(1) # Play sound once
+        
         if self.is_working:
             self.is_working = False
             self.is_grace = True
 
             self.time_over_sound.play()
             self.remaining_time = self.GRACE_TIME
+            self.topic_label.textChanged.disconnect()
+            self.topic_label.setEnabled(False)
             self.topic_label.setText("Prepare to take a break")
             self.apply_topic_style(self.COLOR_GRACE)
             self.toggle_time_button.setEnabled(False)
@@ -142,12 +156,16 @@ class MainWindow(QMainWindow):
 
             self.time_over_sound.play()
             self.remaining_time = self.WORK_TIME
-            self.topic_label.setText(self.WORK_TOPIC)
+            self.topic_label.setText(self.work_topic)
+            self.topic_label.setEnabled(True)
+            self.topic_label.textChanged.connect(self.update_topic)
             self.apply_topic_style(self.COLOR_WORK)
+            self.toggle_time_button.setEnabled(True)
+            self.topic_label.setReadOnly(False)
         
-        self.update_label_text()
+        self.update_timer_label()
 
-    def update_label_text(self):
+    def update_timer_label(self):
         """Handles the format MM:SS or H:MM:SS for the timer label."""
         total_seconds = int(self.remaining_time.total_seconds())
         hours, remainder = divmod(total_seconds, 3600)
@@ -157,6 +175,21 @@ class MainWindow(QMainWindow):
             self.timer_label.setText(f"{hours}:{mins:02d}:{secs:02d}")
         else:
             self.timer_label.setText(f"{mins:02d}:{secs:02d}")
+    
+    def update_topic(self, text):
+        """Updates the work topic based on user input."""
+        self.work_topic = text
+
+    def mousePressEvent(self, e):
+        """Clear focus when clicking outside QLineEdit."""
+        self.topic_label.clearFocus()
+        super().mousePressEvent(e)
+
+    def keyPressEvent(self, e):
+        """Toggle timer on spacebar press."""
+        if e.key() == Qt.Key.Key_Space or e.key() == Qt.Key.Key_Return:
+            self.toggle_timer()
+        super().keyPressEvent(e)
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
