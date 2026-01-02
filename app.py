@@ -1,13 +1,12 @@
 from datetime import timedelta
 import sys
 
-from PyQt6.QtCore import Qt, QTimer, QUrl
+from PyQt6.QtCore import Qt, QPoint, QPropertyAnimation, QTimer, QUrl 
 from PyQt6.QtMultimedia import QSoundEffect
 from PyQt6.QtWidgets import (
     QApplication,
     QHBoxLayout,
     QPushButton,
-    QLabel,
     QLineEdit,
     QMainWindow,
     QVBoxLayout,
@@ -28,6 +27,11 @@ class MainWindow(QMainWindow):
         self.work_topic = "Topic Name"
         self.is_working = True
         self.is_grace = False
+
+        # -- Animation Constants --
+        self.SHAKE_DURATION = 50   # ms per shake
+        self.SHAKE_COUNT = 3       # number of shakes
+        self.SHAKE_DISTANCE = 8    # pixels to the side
 
         # -- Style constants --
         self.FONT_SIZE_TOPIC = "24px"
@@ -51,10 +55,17 @@ class MainWindow(QMainWindow):
         """)
         self.topic_label.textChanged.connect(self.update_topic)
 
-        self.timer_label = QLabel()
+        self.timer_label = QLineEdit()
         self.timer_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.timer_label.setContentsMargins(0, 0, 0, 30)
-        self.timer_label.setStyleSheet(f"font-size: {self.FONT_SIZE_TIMER};")
+        self.timer_label.setStyleSheet(f"""
+            font-size: {self.FONT_SIZE_TIMER};
+            border: none;
+            background: transparent;
+        """)
+        self.timer_label.setReadOnly(True)
+        # self.timer_label.returnPressed.connect(self.toggle_timer)
+        self.timer_label.focusInEvent = lambda e: self.enter_edit_mode(e)
+        self.timer_label.focusOutEvent = lambda e: self.exit_edit_mode(e)
 
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.update_timer)
@@ -67,8 +78,8 @@ class MainWindow(QMainWindow):
         filename_time_over = "sounds/bell.wav"
         self.time_over_sound = QSoundEffect(self)
         self.time_over_sound.setSource(QUrl.fromLocalFile(filename_time_over))
-        # Could check whether the sound loaded correctly for certain cases
         # Although the C++ engine does it automatically
+        # Some won't have access to the console to see errors
         # if self.time_over_sound.status() == QSoundEffect.Status.Error
         #    print(f"Error loading sound: {filename_time_over}")
 
@@ -109,6 +120,96 @@ class MainWindow(QMainWindow):
 
         self.toggle_time_button.setText("Start")
         self.toggle_time_button.setEnabled(True)
+        self.is_working = True
+        self.is_grace = False
+    
+    # --- EDIT MODE HANDLERS ---
+    def enter_edit_mode(self, e):
+        """Switch to edit mode: show HH:MM:SS format with all digits."""
+        if not self.timer.isActive():
+            self.timer_label.setReadOnly(False)
+            total_seconds = int(self.remaining_time.total_seconds())
+            hours, remainder = divmod(total_seconds, 3600)
+            mins, secs = divmod(remainder, 60)
+            self.timer_label.setText(f"{hours:02d}:{mins:02d}:{secs:02d}")
+            self.timer_label.textChanged.connect(self.format_time_input)
+
+            # Force cursor to end of text on click
+            def lock_cursor_to_end(e):
+                QLineEdit.mousePressEvent(self.timer_label, e)
+                self.timer_label.setCursorPosition(
+                    len(self.timer_label.text())
+                )
+            
+            self.timer_label.mousePressEvent = lock_cursor_to_end
+                    
+        QLineEdit.focusInEvent(self.timer_label, e)
+
+    def exit_edit_mode(self, e):
+        """Switch back to display mode."""
+        try:
+            self.timer_label.textChanged.disconnect(self.format_time_input)
+        except TypeError:
+            pass
+        
+        if not self.parse_manual_input():
+            self.shake_window()
+
+        self.timer_label.setReadOnly(True)
+        self.update_timer_label()
+        QLineEdit.focusOutEvent(self.timer_label, e)
+
+    def format_time_input(self, text):
+        """Keep only digits and format as HHMMSS (shifts left as you type)."""
+        # Remove non-digit characters, limit to only 6, and format with colons
+        digits = ''.join(c for c in text if c.isdigit())
+        digits = digits[-6:].zfill(6)
+        formatted = f"{digits[0:2]}:{digits[2:4]}:{digits[4:6]}"
+
+        # Prevent an infinite recursion loop
+        self.timer_label.textChanged.disconnect(self.format_time_input)
+        self.timer_label.setText(formatted)
+        self.timer_label.setCursorPosition(len(formatted))
+        self.timer_label.textChanged.connect(self.format_time_input)
+    
+    def parse_manual_input(self):
+        """Converts the formatted text back into a timedelta"""
+        text = self.timer_label.text().replace(':', '')
+        if len(text) == 6 and text.isdigit():
+            hours = int(text[0:2])
+            mins = int(text[2:4])
+            secs = int(text[4:6])
+
+            if hours == 0 and mins == 0 and secs == 0:
+                return False
+            
+            if hours == 99 and mins == 99 and secs == 99:
+                hours = 99
+                mins = 59
+                secs = 59
+
+            self.remaining_time = timedelta(
+                hours=hours, minutes=mins, seconds=secs
+            )
+            return True
+        return False
+
+    def shake_window(self):
+        """Animates the window shaking to indicate an error."""
+        self.shake_anim = QPropertyAnimation(self, b"pos")
+        self.shake_anim.setDuration(self.SHAKE_DURATION)
+        self.shake_anim.setLoopCount(self.SHAKE_COUNT)
+
+        start_pos = self.pos()
+
+        # Shake path: Start -> Slightly Left -> Slightly Right -> Start
+        # 0 is the start, 1 is the end of the animation loop
+        self.shake_anim.setKeyValueAt(0, start_pos)
+        self.shake_anim.setKeyValueAt(0.25, start_pos + QPoint(-5, 0))
+        self.shake_anim.setKeyValueAt(0.75, start_pos + QPoint(5, 0))
+        self.shake_anim.setKeyValueAt(1, start_pos)
+
+        self.shake_anim.start()
 
     # --- UI HELPERS ---
     def update_timer(self):
@@ -185,11 +286,13 @@ class MainWindow(QMainWindow):
         self.topic_label.clearFocus()
         super().mousePressEvent(e)
 
-    def keyPressEvent(self, e):
-        """Toggle timer on spacebar press."""
-        if e.key() == Qt.Key.Key_Space or e.key() == Qt.Key.Key_Return:
-            self.toggle_timer()
-        super().keyPressEvent(e)
+    # NOTE: Disabled due to bug:
+    # On edit mode, enter key starts the default timer
+    # def keyPressEvent(self, e):
+    #     """Toggle timer on spacebar press."""
+    #     if e.key() == Qt.Key.Key_Space or e.key() == Qt.Key.Key_Return:
+    #         self.toggle_timer()
+    #     super().keyPressEvent(e)
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
