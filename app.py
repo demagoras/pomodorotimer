@@ -14,16 +14,27 @@ from PyQt6.QtWidgets import (
 )
 
 class MainWindow(QMainWindow):
-    """
-    Main application window for the Pomodoro Timer.
-    Handles the UI layout and countdown logic.
-    """
+    """Main application window for the Pomodoro Timer."""
     def __init__(self):
         super().__init__()
 
-        self.WORK_TIME = timedelta(seconds = 3)
-        self.WORK_TOPIC = "Science"
+        # -- Time constants & boolean flags --
         self.TICK_INTERVAL = 1000 # milliseconds
+        self.WORK_TIME = timedelta(minutes = 25)
+        self.BREAK_TIME = timedelta(minutes = 5)
+        self.GRACE_TIME = timedelta(seconds = 10)
+
+        self.WORK_TOPIC = "Topic Name"
+        self.is_working = True
+        self.is_grace = False
+
+        # -- Style constants --
+        self.FONT_SIZE_TOPIC = "24px"
+        self.FONT_SIZE_TIMER = "48px"
+
+        self.COLOR_WORK = "white"
+        self.COLOR_GRACE = "orange"
+        self.COLOR_BREAK = "green"
 
         self.setWindowTitle("Pomodoro Timer")
         self.setFixedSize(300, 200)
@@ -32,17 +43,17 @@ class MainWindow(QMainWindow):
         self.topic_label.setAlignment(
             Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignHCenter
             )
-        self.topic_label.setStyleSheet("font-size: 24px;")
+        self.topic_label.setStyleSheet(f"font-size: {self.FONT_SIZE_TOPIC};")
 
         self.timer_label = QLabel()
         self.timer_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.timer_label.setContentsMargins(0, 0, 0, 30)
-        self.timer_label.setStyleSheet("font-size: 48px;")
+        self.timer_label.setStyleSheet(f"font-size: {self.FONT_SIZE_TIMER};")
 
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.update_timer)
 
-        self.toggle_time_button = QPushButton("Pause")
+        self.toggle_time_button = QPushButton("Start")
         self.reset_button = QPushButton("Reset")
         self.toggle_time_button.clicked.connect(self.toggle_timer)
         self.reset_button.clicked.connect(self.reset_timer)
@@ -82,16 +93,16 @@ class MainWindow(QMainWindow):
             self.toggle_time_button.setText("Pause")
 
     def reset_timer(self):
-        """Resets the timer, UI, and clock rhythm."""
+        """Resets everything to the initial state."""
         self.timer.stop()
         self.time_over_sound.stop()
 
         self.remaining_time = self.WORK_TIME
         self.update_label_text()
         self.topic_label.setText(self.WORK_TOPIC)
-        self.toggle_time_button.setText("Pause")
+
+        self.toggle_time_button.setText("Start")
         self.toggle_time_button.setEnabled(True)
-        self.timer.start(self.TICK_INTERVAL)
 
     # --- UI HELPERS ---
     def update_timer(self):
@@ -99,16 +110,42 @@ class MainWindow(QMainWindow):
         if self.remaining_time.total_seconds() > 0:
             self.remaining_time -= timedelta(milliseconds=self.TICK_INTERVAL)
             self.update_label_text()
-        else:
-            self.timer.stop()
+        else: # Time is over
+            self.handle_transition()
 
-            self.topic_label.setText("Break time!")
-            self.timer_label.setText("00:00")
+    def apply_topic_style(self, color):
+        """Standardized styling to keep handle_transition clean."""
+        style = f"font-size: {self.FONT_SIZE_TOPIC}; color: {color};"
+        self.topic_label.setStyleSheet(style)
+    
+    def handle_transition(self):
+        """Handles the transition between work and break periods."""
+        self.time_over_sound.setLoopCount(1) # Play sound once
+        if self.is_working:
+            self.is_working = False
+            self.is_grace = True
 
-            self.time_over_sound.setLoopCount(1) # Play sound only once
             self.time_over_sound.play()
-            
+            self.remaining_time = self.GRACE_TIME
+            self.topic_label.setText("Prepare to take a break")
+            self.apply_topic_style(self.COLOR_GRACE)
             self.toggle_time_button.setEnabled(False)
+        elif self.is_grace:
+            self.is_grace = False
+
+            self.remaining_time = self.BREAK_TIME
+            self.topic_label.setText("Break Time!")
+            self.apply_topic_style(self.COLOR_BREAK)
+        else:
+            self.is_working = True
+            self.is_grace = False
+
+            self.time_over_sound.play()
+            self.remaining_time = self.WORK_TIME
+            self.topic_label.setText(self.WORK_TOPIC)
+            self.apply_topic_style(self.COLOR_WORK)
+        
+        self.update_label_text()
 
     def update_label_text(self):
         """Handles the format MM:SS or H:MM:SS for the timer label."""
