@@ -63,9 +63,8 @@ class MainWindow(QMainWindow):
             background: transparent;
         """)
         self.timer_label.setReadOnly(True)
-        # self.timer_label.returnPressed.connect(self.toggle_timer)
-        self.timer_label.focusInEvent = lambda e: self.enter_edit_mode(e)
-        self.timer_label.focusOutEvent = lambda e: self.exit_edit_mode(e)
+        self.timer_label.focusInEvent = self.enter_edit_mode
+        self.timer_label.focusOutEvent = self.exit_edit_mode
 
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.update_timer)
@@ -78,10 +77,11 @@ class MainWindow(QMainWindow):
         filename_time_over = "sounds/bell.wav"
         self.time_over_sound = QSoundEffect(self)
         self.time_over_sound.setSource(QUrl.fromLocalFile(filename_time_over))
+
         # Although the C++ engine does it automatically
         # Some won't have access to the console to see errors
-        # if self.time_over_sound.status() == QSoundEffect.Status.Error
-        #    print(f"Error loading sound: {filename_time_over}")
+        if self.time_over_sound.status() == QSoundEffect.Status.Error:
+            print(f"Error loading sound: {filename_time_over}")
 
         # -- Layout Management --
         buttons_layout = QHBoxLayout()
@@ -126,7 +126,8 @@ class MainWindow(QMainWindow):
     # --- EDIT MODE HANDLERS ---
     def enter_edit_mode(self, e):
         """Switch to edit mode: show HH:MM:SS format with all digits."""
-        if not self.timer.isActive():
+        if (not self.timer.isActive() and
+            self.toggle_time_button.text() != "Resume"):
             self.timer_label.setReadOnly(False)
             total_seconds = int(self.remaining_time.total_seconds())
             hours, remainder = divmod(total_seconds, 3600)
@@ -142,14 +143,14 @@ class MainWindow(QMainWindow):
                 )
             
             self.timer_label.mousePressEvent = lock_cursor_to_end
-                    
+
         QLineEdit.focusInEvent(self.timer_label, e)
 
     def exit_edit_mode(self, e):
         """Switch back to display mode."""
         try:
             self.timer_label.textChanged.disconnect(self.format_time_input)
-        except TypeError:
+        except (TypeError, RuntimeError):
             pass
         
         if not self.parse_manual_input():
@@ -288,11 +289,21 @@ class MainWindow(QMainWindow):
 
     # NOTE: Disabled due to bug:
     # On edit mode, enter key starts the default timer
-    # def keyPressEvent(self, e):
-    #     """Toggle timer on spacebar press."""
-    #     if e.key() == Qt.Key.Key_Space or e.key() == Qt.Key.Key_Return:
-    #         self.toggle_timer()
-    #     super().keyPressEvent(e)
+    def keyPressEvent(self, e):
+        """Toggle topic and timer on spacebar press."""
+        if e.key() == Qt.Key.Key_Space:
+            self.toggle_timer()
+            return
+
+        if e.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+            if self.timer_label.hasFocus() or self.topic_label.hasFocus():
+                self.centralWidget().setFocus()
+                return
+            else:
+                self.toggle_timer()
+                return
+            
+        super().keyPressEvent(e)
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
