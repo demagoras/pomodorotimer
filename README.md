@@ -11,16 +11,32 @@ A PyQt6-based Pomodoro timer with customizable work/break intervals.
 
 ## Installation
 
+### Prerequisites
+- Python 3.9+ (tested with Python 3.14.2)
+- PyQt6
+
+### Steps
 1. **Clone the repository:**
    ```sh
    git clone https://github.com/demagoras/pomodorotimer.git
    ```
 2. **Open the project folder:**
    ```sh
-   cd custom-prompt-generator
+   cd pomodorotimer
    ```
-3. **Run the project:**
-   - Simply open `index.html` in your browser—no setup required!
+3. **(Optional but recommended) Create a virtual environment:**
+   ```
+   python -m venv venv
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   ```
+4. **Install dependencies:**
+   ```
+   pip install -r requirements.txt
+   ```
+5. **Run the application:**
+   ```
+   python app.py
+   ```
 
 ## Known Issues
 - Enter key conflicts with text editing
