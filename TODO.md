@@ -7,8 +7,7 @@ A PyQt6-based Pomodoro timer with customizable work/break intervals.
   - `TypeError: disconnect() failed between 'textChanged' and all its connections`
 - [ ] Force valid time input
   - Don't allow 00:00:00, require actual time value without merely falling back on the default time
-- [ ] Disable text highlighting on fast-click
-- [ ] Disable editing time when paused
+- [ ] Use `QElapsedTimer` instead of accumulative subtraction
 
 ## Backlog
 - [ ] Modularize code structure
@@ -16,6 +15,8 @@ A PyQt6-based Pomodoro timer with customizable work/break intervals.
 - [ ] Prevent `if not self.parse_manual_input():` from running in `exit_edit_mode()` when not in focus mode
   - Note that "focus mode" is triggered even by just clicking on the widget. Look into possibly bypassing this
   - Thus screen shakes even when not editing
+- [ ] Disable text highlighting on fast-click
+- [ ] Disable editing time when paused
 
 ### Completed Column ✓
 - [x] Fix Enter key conflict with QLineEdit 2026-01-03

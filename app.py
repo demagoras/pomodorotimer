@@ -1,5 +1,6 @@
 from datetime import timedelta
 from enum import Enum
+from pathlib import Path
 import sys
 
 from PyQt6.QtCore import Qt, QPoint, QPropertyAnimation, QTimer, QUrl 
@@ -13,6 +14,8 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
     QWidget
 )
+
+BASE_DIR = Path(__file__).resolve().parent
         
 class WorkState(Enum):
     WORKING = 1
@@ -26,9 +29,9 @@ class MainWindow(QMainWindow):
 
         # -- Time constants & boolean flags --
         self.TICK_INTERVAL = 1000 # milliseconds
-        self.WORK_TIME = timedelta(seconds = 3)
-        self.BREAK_TIME = timedelta(seconds = 3)
-        self.GRACE_TIME = timedelta(seconds = 5)
+        self.WORK_TIME = timedelta(minutes = 25)
+        self.BREAK_TIME = timedelta(minutes = 5)
+        self.GRACE_TIME = timedelta(seconds = 10)
 
         self.work_topic = "Topic Name"
         self.state = WorkState.WORKING
@@ -79,9 +82,9 @@ class MainWindow(QMainWindow):
         self.toggle_time_button.clicked.connect(self.toggle_timer)
         self.reset_button.clicked.connect(self.reset_timer)
 
-        filename_time_over = "sounds/bell.wav"
+        filename_time_over = BASE_DIR / "sounds" / "bell.wav"
         self.time_over_sound = QSoundEffect(self)
-        self.time_over_sound.setSource(QUrl.fromLocalFile(filename_time_over))
+        self.time_over_sound.setSource(QUrl.fromLocalFile(str(filename_time_over)))
 
         # Although the C++ engine does it automatically
         # Some won't have access to the console to see errors
