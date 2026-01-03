@@ -1,4 +1,5 @@
 from datetime import timedelta
+from enum import Enum
 import sys
 
 from PyQt6.QtCore import Qt, QPoint, QPropertyAnimation, QTimer, QUrl 
@@ -12,6 +13,11 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
     QWidget
 )
+        
+class WorkState(Enum):
+    WORKING = 1
+    GRACE = 2
+    BREAK = 3
 
 class MainWindow(QMainWindow):
     """Main application window for the Pomodoro Timer."""
@@ -20,13 +26,12 @@ class MainWindow(QMainWindow):
 
         # -- Time constants & boolean flags --
         self.TICK_INTERVAL = 1000 # milliseconds
-        self.WORK_TIME = timedelta(minutes = 25)
-        self.BREAK_TIME = timedelta(minutes = 5)
-        self.GRACE_TIME = timedelta(seconds = 10)
+        self.WORK_TIME = timedelta(seconds = 3)
+        self.BREAK_TIME = timedelta(seconds = 3)
+        self.GRACE_TIME = timedelta(seconds = 5)
 
         self.work_topic = "Topic Name"
-        self.is_working = True
-        self.is_grace = False
+        self.state = WorkState.WORKING
 
         # -- Animation Constants --
         self.SHAKE_DURATION = 50   # ms per shake
@@ -120,8 +125,8 @@ class MainWindow(QMainWindow):
 
         self.toggle_time_button.setText("Start")
         self.toggle_time_button.setEnabled(True)
-        self.is_working = True
-        self.is_grace = False
+        self.state = WorkState.WORKING
+        self.apply_topic_style(self.COLOR_WORK)
     
     # --- EDIT MODE HANDLERS ---
     def enter_edit_mode(self, e):
@@ -230,42 +235,6 @@ class MainWindow(QMainWindow):
             background: transparent;
         """
         self.topic_label.setStyleSheet(style)
-    
-    def handle_transition(self):
-        """Handles the transition between work and break periods."""
-        self.time_over_sound.setLoopCount(1) # Play sound once
-        
-        if self.is_working:
-            self.is_working = False
-            self.is_grace = True
-
-            self.time_over_sound.play()
-            self.remaining_time = self.GRACE_TIME
-            self.topic_label.textChanged.disconnect()
-            self.topic_label.setEnabled(False)
-            self.topic_label.setText("Prepare to take a break")
-            self.apply_topic_style(self.COLOR_GRACE)
-            self.toggle_time_button.setEnabled(False)
-        elif self.is_grace:
-            self.is_grace = False
-
-            self.remaining_time = self.BREAK_TIME
-            self.topic_label.setText("Break Time!")
-            self.apply_topic_style(self.COLOR_BREAK)
-        else:
-            self.is_working = True
-            self.is_grace = False
-
-            self.time_over_sound.play()
-            self.remaining_time = self.WORK_TIME
-            self.topic_label.setText(self.work_topic)
-            self.topic_label.setEnabled(True)
-            self.topic_label.textChanged.connect(self.update_topic)
-            self.apply_topic_style(self.COLOR_WORK)
-            self.toggle_time_button.setEnabled(True)
-            self.topic_label.setReadOnly(False)
-        
-        self.update_timer_label()
 
     def update_timer_label(self):
         """Handles the format MM:SS or H:MM:SS for the timer label."""
@@ -282,13 +251,55 @@ class MainWindow(QMainWindow):
         """Updates the work topic based on user input."""
         self.work_topic = text
 
+    # --- STATE TRANSITIONS ---
+    def handle_transition(self):
+        """Handles the transition between work and break periods."""
+        self.time_over_sound.setLoopCount(1) # Play sound once
+
+        if self.state == WorkState.WORKING:
+            self.transition_to_grace()
+        elif self.state == WorkState.GRACE:
+            self.transition_to_break()
+        else:
+            self.transition_to_work()
+        
+        self.update_timer_label()
+    
+    def transition_to_grace(self):
+        """Transition from WORKING to GRACE period."""
+        self.state = WorkState.GRACE
+        self.time_over_sound.play()
+        self.remaining_time = self.GRACE_TIME
+        self.topic_label.textChanged.disconnect()
+        self.topic_label.setEnabled(False)
+        self.topic_label.setText("Prepare for a break")
+        self.apply_topic_style(self.COLOR_GRACE)
+        self.toggle_time_button.setEnabled(False)
+    
+    def transition_to_break(self):
+        """Transition from GRACE to BREAK period."""
+        self.state = WorkState.BREAK
+        self.remaining_time = self.BREAK_TIME
+        self.topic_label.setText("Break Time!")
+        self.apply_topic_style(self.COLOR_BREAK)
+    
+    def transition_to_work(self):
+        self.state = WorkState.WORKING
+        self.time_over_sound.play()
+        self.remaining_time = self.WORK_TIME
+        self.topic_label.setText(self.work_topic)
+        self.topic_label.setEnabled(True)
+        self.topic_label.textChanged.connect(self.update_topic)
+        self.apply_topic_style(self.COLOR_WORK)
+        self.toggle_time_button.setEnabled(True)
+        self.topic_label.setReadOnly(False)
+
+    # --- EVENT HANDLERS ---
     def mousePressEvent(self, e):
         """Clear focus when clicking outside QLineEdit."""
         self.topic_label.clearFocus()
         super().mousePressEvent(e)
 
-    # NOTE: Disabled due to bug:
-    # On edit mode, enter key starts the default timer
     def keyPressEvent(self, e):
         """Toggle topic and timer on spacebar press."""
         if e.key() == Qt.Key.Key_Space:
