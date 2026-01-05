@@ -39,7 +39,6 @@ A PyQt6-based Pomodoro timer with customizable work/break intervals.
    ```
 
 ## Known Issues
-- Fast-clicking timer in edit mode can highlight text unexpectedly
 - Resetting during grace and break periods crashes the program at a later stage
 
 ## Contributing
