@@ -11,6 +11,7 @@ from PyQt6.QtWidgets import (
     QPushButton,
     QLineEdit,
     QMainWindow,
+    QMessageBox,
     QVBoxLayout,
     QWidget
 )
@@ -137,6 +138,12 @@ class MainWindow(QMainWindow):
         if (not self.timer.isActive() and
             self.toggle_time_button.text() != "Resume"):
             self.timer_label.setReadOnly(False)
+
+            # Stop user from highlighting the timer text
+            self.timer_label.selectionChanged.connect(
+                self.timer_label.deselect
+            )
+            
             total_seconds = int(self.remaining_time.total_seconds())
             hours, remainder = divmod(total_seconds, 3600)
             mins, secs = divmod(remainder, 60)
@@ -149,8 +156,21 @@ class MainWindow(QMainWindow):
                 self.timer_label.setCursorPosition(
                     len(self.timer_label.text())
                 )
+
+            # Even if the user manaages to trick the cursor
+            # Just append the number to the end
+            def force_input_to_end(e):
+                if e.text().isdigit():
+                    e.ignore()
+                    current = self.timer_label.text()
+                    self.timer_label.setText(current + e.text())
+                    self.timer_label.setCursorPosition(len(self.timer_label.text()))
+                    self.format_time_input(self.timer_label.text())
+                else:
+                    QLineEdit.keyPressEvent(self.timer_label, e)
             
             self.timer_label.mousePressEvent = lock_cursor_to_end
+            self.timer_label.keyPressEvent = force_input_to_end
 
         QLineEdit.focusInEvent(self.timer_label, e)
 
@@ -180,6 +200,8 @@ class MainWindow(QMainWindow):
         self.timer_label.setText(formatted)
         self.timer_label.setCursorPosition(len(formatted))
         self.timer_label.textChanged.connect(self.format_time_input)
+
+        self.parse_manual_input()
     
     def parse_manual_input(self):
         """Converts the formatted text back into a timedelta"""
@@ -188,9 +210,6 @@ class MainWindow(QMainWindow):
             hours = int(text[0:2])
             mins = int(text[2:4])
             secs = int(text[4:6])
-
-            if hours == 0 and mins == 0 and secs == 0:
-                return False
             
             if hours == 99 and mins == 99 and secs == 99:
                 hours = 99
@@ -200,7 +219,10 @@ class MainWindow(QMainWindow):
             self.remaining_time = timedelta(
                 hours=hours, minutes=mins, seconds=secs
             )
-            return True
+
+            is_valid = self.remaining_time.total_seconds() > 0
+            self.toggle_time_button.setEnabled(is_valid)
+            return is_valid
         return False
 
     def shake_window(self):
@@ -305,22 +327,39 @@ class MainWindow(QMainWindow):
 
     def keyPressEvent(self, e):
         """Toggle topic and timer on spacebar press."""
-        if e.key() == Qt.Key.Key_Space:
-            self.toggle_timer()
-            return
-
-        if e.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
-            if self.timer_label.hasFocus() or self.topic_label.hasFocus():
-                self.centralWidget().setFocus()
-                return
-            else:
+        if self.toggle_time_button.isEnabled():
+            if e.key() == Qt.Key.Key_Space:
                 self.toggle_timer()
                 return
+
+            if e.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+                if self.timer_label.hasFocus() or self.topic_label.hasFocus():
+                    self.centralWidget().setFocus()
+                    return
+                else:
+                    self.toggle_timer()
+                    return
             
         super().keyPressEvent(e)
+    
+    def closeEvent(self, e):
+        confirmation = QMessageBox.question(
+            self,
+            "Confirmation",
+            "Are you sure you want to close this window?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
 
-if __name__ == "__main__":
+        if confirmation == QMessageBox.StandardButton.Yes:
+            e.accept()
+        else:
+            e.ignore()
+
+def main():
     app = QApplication(sys.argv)
     window = MainWindow()
     window.show()
     sys.exit(app.exec())
+
+if __name__ == "__main__":
+    main()
