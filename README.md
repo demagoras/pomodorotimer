@@ -7,7 +7,7 @@ A PyQt6-based Pomodoro timer with customizable work/break intervals.
 - Editable timer with intuitive digit-only input
 - Grace period between work and break
 - Non-intrusive audio notifications
-- Keyboard shortcuts (spacebar/Enter to start & resume) - **currently disabled**
+- Keyboard shortcuts (spacebar/Enter to start & resume)
 
 ## Installation
 
